@@ -9,27 +9,99 @@ import RightSideContainer from "../../components/RightSideContainer/RightSideCon
 
 import MainHead from "./components/MainHead";
 import ReportNavBar from "./components/ReportNavBar/ReportNavBar";
-import { SaveReports } from "../../global-constant/SaveReport";
+import TableData from "../../global-constant/TableData";
+import { useNavigate } from "react-router-dom";
 
-const ReportScenarios = () => {
+const ReportMainContainer = () => {
   const [allOpenTabs, setAllOpenTAbs] = useState([]);
   const [allOpenTabs2, setAllOpenTAbs2] = useState([]);
   const [openTabData, setOpenTabData] = useState([]);
   const [responseData, setResponseData] = useState([]);
   const [page, setPage] = useState(1);
   const [startDate, setStartDate] = useState(null);
-  const [end_date, setEnd_date] = useState(null);
+  const [endDate, setEndDate] = useState(null);
   const [type, setType] = useState("");
   const [title, settitle] = useState("");
   const [dropStatus, setDropStatus] = useState();
   const [mainType, setMainType] = useState("");
   const [mainTitle, setMainTitle] = useState("");
 
+
+  const [tables, setTables] = useState([
+    {
+      tbl: "",
+      related: [],
+      col: ["", ["--"]],
+    },
+  ]);
+
+
+
+  const navigate = useNavigate();
+
+  const qPam = new URLSearchParams(window.location.search);
+  useEffect(() => {
+    setPage(qPam.get("page"));
+  }, [qPam]);
+
   const handleSavedReport = (e) => {
-    setAllOpenTAbs([]);
-    setAllOpenTAbs2([]);
-    setAllOpenTAbs2(e.table_data);
-    setOpenTabData(e.fields_json);
+    setAllOpenTAbs(e.fields_json);
+    const newElement = [...e.fields_json];
+    let filterTitle;
+    let filterType;
+    let filterShowTitle;
+    let filterShowType;
+    let custom_column;
+    let arr = [];
+    newElement.map((item, i) => {
+      if (
+        item.type == "all_course_enrolled" ||
+        item.type == "completed_courses" ||
+        item.type == "registered_courses" ||
+        item.type == "total_courses" ||
+        item.type == "total_users"
+      ) {
+        custom_column = true;
+      } else {
+        custom_column = false;
+      }
+      if (TableData.filter((e) => e.table_name == item.table_name).length > 0) {
+        filterShowTitle = TableData.filter(
+          (e) => e.table_name == item.table_name
+        )[0].title;
+        filterShowType = TableData.filter(
+          (e) => e.table_name == item.table_name
+        )[0].fields.filter((e) => e[0] == item.type)[0][1];
+
+        filterTitle = TableData.filter(
+          (e) => e.table_name == item.table_name
+        )[0].table_name;
+        filterType = TableData.filter(
+          (e) => e.table_name == item.table_name
+        )[0].fields.filter((e) => e[0] == item.type)[0][0];
+
+  
+        arr.push({
+          data: {
+            required: false,
+            type: filterType,
+            className: "form-control",
+            label: "",
+            placeholder: "",
+            custom_column: custom_column,
+            table_name: filterTitle,
+          },
+          show_type: {
+            showType: filterShowType,
+            name: filterShowTitle,
+          },
+        });
+      }
+      return arr;
+    });
+ 
+
+    setAllOpenTAbs2(arr);
   };
 
   const handleDragStart = (type, title, show_type, mainTitle) => {
@@ -235,12 +307,12 @@ const ReportScenarios = () => {
 
   const fetchData = async () => {
     if (allOpenTabs.length > 0) {
-      if (startDate && end_date) {
+      if (startDate && endDate) {
         let data = JSON.stringify(allOpenTabs);
         let datefilter = JSON.stringify([
           {
             start_date: startDate,
-            end_date: end_date,
+            end_date: endDate,
           },
         ]);
 
@@ -288,13 +360,64 @@ const ReportScenarios = () => {
     }
   };
 
+  const fetchTableData = async () => {
+    await axios
+    .get(
+      `https://staging.trainingpipeline.com/backend/web/mii/applicant/get-tables`,
+      {
+        headers: {
+          accept: "application/json",
+        },
+      }
+    )
+    .then(
+      (res) => {
+        if (res.data.data !== undefined) {
+      
+          
+          let tableData = Object.values(res.data.data);
+          let related = [];
+          related[0] = tableData;
+          // remove this line
+          // setRelatedAndTables(related)
+          // setRelatedOrTables(related)
+          
+          let tmpAndFilter = [...tables];
+          tmpAndFilter[0]["related"] = tableData;
+     
+          setTables(tmpAndFilter);
+        }
+      },
+      (error) => {
+        console.log(error);
+      }
+    );
+
+
+  }
+  useEffect(() => {
+    fetchTableData();
+  }, [])
+
+
+
+  
+
   useEffect(() => {
     fetchData();
-  }, [allOpenTabs, page, end_date]);
+  }, [allOpenTabs, page, endDate]);
 
   const handleChangePage = (event, value) => {
-    setPage(value);
+
+    navigate(`/?page=${value}`);
+    // if (allOpenTabs.length > 0) {
+    //   setPage(value);
+    // } else {
+    //   setPage(1);
+    // }
   };
+
+console.log(tables);
 
   return (
     <Box
@@ -308,7 +431,9 @@ const ReportScenarios = () => {
       <ReportNavBar handleSavedReport={handleSavedReport} />
       <MainHead
         startDate={startDate}
-        end_date={end_date}
+        endDate={endDate}
+        setStartDate={setStartDate}
+        setEndDate={setEndDate}
         allOpenTabs={allOpenTabs}
       />
       <Box
@@ -328,6 +453,8 @@ const ReportScenarios = () => {
           openTab={handleRightTab}
           allOpenTabs2={allOpenTabs2}
           dragStart={handleDragStart}
+          tables={tables}
+          setTables={setTables}
         />
         <RightSideContainer
           allOpenTabs={allOpenTabs}
@@ -346,15 +473,18 @@ const ReportScenarios = () => {
           justifyContent: "center",
         }}
       >
-        <Pagination
-          count={responseData.pages}
-          variant="outlined"
-          shape="rounded"
-          onChange={handleChangePage}
-        />
+        {allOpenTabs.length > 0 && (
+          <Pagination
+            count={allOpenTabs.length > 0 ? responseData.pages : 1}
+            variant="outlined"
+            shape="rounded"
+            // onChange={(e) => navigate(`/?page=${e.value}`)}
+            onChange={handleChangePage}
+          />
+        )}
       </Box>
     </Box>
   );
 };
 
-export default ReportScenarios;
+export default ReportMainContainer;
